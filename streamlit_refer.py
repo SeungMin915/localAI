@@ -3,6 +3,7 @@ import tiktoken
 from loguru import logger
 import uuid
 import os
+import torch  # 추가
 
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chat_models import ChatOpenAI
@@ -151,10 +152,11 @@ def get_text_chunks(documents):
 
 
 def get_vectorstore(text_chunks):
+    device = torch.device("cpu")  # 반드시 torch.device 객체 사용
     embeddings = HuggingFaceEmbeddings(
         model_name="jhgan/ko-sroberta-multitask",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
+        model_kwargs={"device": device},
+        encode_kwargs={"normalize_embeddings": True}
     )
     vectordb = FAISS.from_documents(text_chunks, embeddings)
     return vectordb
