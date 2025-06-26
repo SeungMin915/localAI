@@ -9,3 +9,4 @@ openai
 pypdf
 loguru
 docx2txt
+pydantic<2.0.0
