@@ -1,41 +1,49 @@
-# 웹 대시보드
-streamlit
-plotly
-altair
+# =========================================================
+# HEART Insight AI 프로젝트 전체 라이브러리 목록 (통합 버전)
+# =========================================================
+
+# 1. 웹 프레임워크 및 UI
+streamlit==1.36.0
+plotly==5.22.0
 matplotlib
 seaborn
+altair
 
-# 데이터 처리
+# 2. 웹 스크래핑
+requests
+beautifulsoup4
+
+# 3. NLP 및 LLM 연동 (Potens.dev & LangChain RAG)
+loguru
+python-dotenv
+openai               # OpenAI API 사용
+tiktoken             # 토큰 계산
+transformers         # BERTopic, Sentence-Transformers 의존성
+sentence-transformers
+bertopic[visualization]
+konlpy               # Mecab 사용
 pandas
 numpy
 
-# NLP 및 AI 분석
-scikit-learn
-gensim
-transformers
-konlpy
-bertopic
-sentence-transformers
+# 4. RAG (문서 기반 질의응답)
+langchain
+langchain-community  # LangChain의 최신 버전 호환성
+langchain-openai     # OpenAI Chat 모델 연결
+pypdf                # PDF 로드
+docx2txt             # DOCX 로드
+unstructured         # PPTX 로드
+faiss-cpu            # 벡터 스토어 (FAISS)
+pydantic<2.0.0       # LangChain 호환성 유지
 
-# 웹 크롤링
-newspaper3k
-beautifulsoup4
-selenium
-requests
-
-# 시계열 예측
+# 5. 트렌드 예측 및 분석 (추후 사용)
 prophet
 statsmodels
-tensorflow
-torch
-
-# 관계 분석
+#tensorflow==2.16.1
 networkx
-
-# 보고서 생성
 python-docx
 reportlab
 fpdf
 
-# 기타
-python-dotenv
+# 6. 기타 유틸리티
+typer
+shellingham
