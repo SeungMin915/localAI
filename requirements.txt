@@ -10,4 +10,4 @@ openai
 pypdf
 loguru
 docx2txt
-pydantic==1.10.12
+pydantic==2.7.5
