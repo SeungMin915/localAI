@@ -1,5 +1,6 @@
 pysqlite3-binary
-langchain
+langchain==0.1.16
+langchain_community==0.0.24
 chromadb
 unstructured
 sentence-transformers
