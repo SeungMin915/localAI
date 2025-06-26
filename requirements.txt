@@ -1,13 +1,41 @@
+# 웹 대시보드
 streamlit
-torch==2.5.1
-langchain>=0.3.26
-chromadb
-unstructured
+plotly
+altair
+matplotlib
+seaborn
+
+# 데이터 처리
+pandas
+numpy
+
+# NLP 및 AI 분석
+scikit-learn
+gensim
+transformers
+konlpy
+bertopic
 sentence-transformers
-faiss-cpu
-tiktoken
-openai
-pypdf
-loguru
-docx2txt
-pydantic==2.7.5
+
+# 웹 크롤링
+newspaper3k
+beautifulsoup4
+selenium
+requests
+
+# 시계열 예측
+prophet
+statsmodels
+tensorflow
+torch
+
+# 관계 분석
+networkx
+
+# 보고서 생성
+python-docx
+reportlab
+fpdf
+
+# 기타
+python-dotenv
