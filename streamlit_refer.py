@@ -1,67 +1,78 @@
 import streamlit as st
 import tiktoken
 from loguru import logger
+import requests
 
-from langchain.chains import ConversationalRetrievalChain
-from langchain.chat_models import ChatOpenAI
-
-from langchain.document_loaders import PyPDFLoader
-from langchain.document_loaders import Docx2txtLoader
-from langchain.document_loaders import UnstructuredPowerPointLoader
-
+from langchain.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredPowerPointLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
-
-from langchain.memory import ConversationBufferMemory
 from langchain.vectorstores import FAISS
-
-# from streamlit_chat import message
-from langchain.callbacks import get_openai_callback
 from langchain.memory import StreamlitChatMessageHistory
 
+
+def call_potens_api(prompt, api_key):
+    url = "https://ai.potens.ai/api/chat"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {"prompt": prompt}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+
+        if isinstance(result, str):
+            return result, []
+        elif isinstance(result, dict):
+            for key in ["response", "answer", "message", "content", "text", "data"]:
+                if key in result:
+                    return result[key], result.get("source_documents", [])
+            return str(result), result.get("source_documents", [])
+        else:
+            return str(result), []
+    except Exception as e:
+        logger.error(f"Potens API 오류: {e}")
+        return f"ERROR: {str(e)}", []
+
+
 def main():
-    st.set_page_config(
-    page_title="DirChat",
-    page_icon=":books:")
+    st.set_page_config(page_title="DirChat", page_icon="📄")
+    st.title("📄 _Private Data :red[QA Chat]_")
 
-    st.title("_Private Data :red[QA Chat]_ :books:")
-
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = None
-
-    if "processComplete" not in st.session_state:
-        st.session_state.processComplete = None
+    if "vectordb" not in st.session_state:
+        st.session_state.vectordb = None
 
     with st.sidebar:
-        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
-        openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
-        process = st.button("Process")
-    if process:
-        if not openai_api_key:
-            st.info("Please add your OpenAI API key to continue.")
-            st.stop()
-        files_text = get_text(uploaded_files)
-        text_chunks = get_text_chunks(files_text)
-        vetorestore = get_vectorstore(text_chunks)
-     
-        st.session_state.conversation = get_conversation_chain(vetorestore,openai_api_key) 
+        uploaded_files = st.file_uploader("📎 문서 업로드", type=['pdf', 'docx', 'pptx'], accept_multiple_files=True)
+        api_key = st.text_input("🔑 Potens API Key", type="password")
+        process = st.button("📚 문서 처리")
 
-        st.session_state.processComplete = True
+    if process:
+        if not api_key:
+            st.warning("API 키를 입력해주세요.")
+            st.stop()
+
+        with st.spinner("문서를 처리 중입니다..."):
+            docs = get_text(uploaded_files)
+            chunks = get_text_chunks(docs)
+            vectordb = get_vectorstore(chunks)
+            st.session_state.vectordb = vectordb
+            st.success("✅ 문서 분석 완료! 질문을 입력해보세요.")
 
     if 'messages' not in st.session_state:
-        st.session_state['messages'] = [{"role": "assistant", 
-                                        "content": "안녕하세요! 주어진 문서에 대해 궁금하신 것이 있으면 언제든 물어봐주세요!"}]
+        st.session_state.messages = [{
+            "role": "assistant",
+            "content": "안녕하세요! 문서 기반 질문을 해보세요."
+        }]
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
     history = StreamlitChatMessageHistory(key="chat_messages")
 
-    # Chat logic
     if query := st.chat_input("질문을 입력해주세요."):
         st.session_state.messages.append({"role": "user", "content": query})
 
@@ -69,87 +80,80 @@ def main():
             st.markdown(query)
 
         with st.chat_message("assistant"):
-            chain = st.session_state.conversation
+            if not st.session_state.vectordb:
+                st.warning("먼저 문서를 업로드하고 처리해야 합니다.")
+                st.stop()
 
-            with st.spinner("Thinking..."):
-                result = chain({"question": query})
-                with get_openai_callback() as cb:
-                    st.session_state.chat_history = result['chat_history']
-                response = result['answer']
-                source_documents = result['source_documents']
+            with st.spinner("답변 생성 중..."):
+                retriever = st.session_state.vectordb.as_retriever(search_type="similarity", k=3)
+                docs = retriever.get_relevant_documents(query)
 
-                st.markdown(response)
-                with st.expander("참고 문서 확인"):
-                    st.markdown(source_documents[0].metadata['source'], help = source_documents[0].page_content)
-                    st.markdown(source_documents[1].metadata['source'], help = source_documents[1].page_content)
-                    st.markdown(source_documents[2].metadata['source'], help = source_documents[2].page_content)
-                    
+                context = "\n\n".join([doc.page_content for doc in docs])
+                final_prompt = f"""다음 문서를 참고하여 질문에 답하세요.
 
+[문서 내용]:
+{context}
 
-# Add assistant message to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+[질문]:
+{query}
+
+[답변]:
+"""
+
+                answer, _ = call_potens_api(final_prompt, api_key)
+
+                st.markdown(answer)
+                with st.expander("📄 참고 문서"):
+                    for doc in docs:
+                        st.markdown(f"**출처**: {doc.metadata.get('source', '알 수 없음')}")
+                        st.markdown(doc.page_content)
+
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+
 
 def tiktoken_len(text):
     tokenizer = tiktoken.get_encoding("cl100k_base")
-    tokens = tokenizer.encode(text)
-    return len(tokens)
+    return len(tokenizer.encode(text))
+
 
 def get_text(docs):
-
-    doc_list = []
-    
+    all_docs = []
     for doc in docs:
-        file_name = doc.name  # doc 객체의 이름을 파일 이름으로 사용
-        with open(file_name, "wb") as file:  # 파일을 doc.name으로 저장
-            file.write(doc.getvalue())
-            logger.info(f"Uploaded {file_name}")
-        if '.pdf' in doc.name:
+        file_name = doc.name
+        with open(file_name, "wb") as f:
+            f.write(doc.getvalue())
+            logger.info(f"Uploaded: {file_name}")
+
+        if file_name.endswith('.pdf'):
             loader = PyPDFLoader(file_name)
-            documents = loader.load_and_split()
-        elif '.docx' in doc.name:
+        elif file_name.endswith('.docx'):
             loader = Docx2txtLoader(file_name)
-            documents = loader.load_and_split()
-        elif '.pptx' in doc.name:
+        elif file_name.endswith('.pptx'):
             loader = UnstructuredPowerPointLoader(file_name)
-            documents = loader.load_and_split()
+        else:
+            continue
 
-        doc_list.extend(documents)
-    return doc_list
+        all_docs.extend(loader.load_and_split())
+
+    return all_docs
 
 
-def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(
+def get_text_chunks(texts):
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=900,
         chunk_overlap=100,
         length_function=tiktoken_len
     )
-    chunks = text_splitter.split_documents(text)
-    return chunks
+    return splitter.split_documents(texts)
 
 
-def get_vectorstore(text_chunks):
+def get_vectorstore(chunks):
     embeddings = HuggingFaceEmbeddings(
-                                        model_name="jhgan/ko-sroberta-multitask",
-                                        model_kwargs={'device': 'cpu'},
-                                        encode_kwargs={'normalize_embeddings': True}
-                                        )  
-    vectordb = FAISS.from_documents(text_chunks, embeddings)
-    return vectordb
-
-def get_conversation_chain(vetorestore,openai_api_key):
-    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name = 'gpt-3.5-turbo',temperature=0)
-    conversation_chain = ConversationalRetrievalChain.from_llm(
-            llm=llm, 
-            chain_type="stuff", 
-            retriever=vetorestore.as_retriever(search_type = 'mmr', vervose = True), 
-            memory=ConversationBufferMemory(memory_key='chat_history', return_messages=True, output_key='answer'),
-            get_chat_history=lambda h: h,
-            return_source_documents=True,
-            verbose = True
-        )
-
-    return conversation_chain
-
+        model_name="jhgan/ko-sroberta-multitask",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    return FAISS.from_documents(chunks, embeddings)
 
 
 if __name__ == '__main__':
